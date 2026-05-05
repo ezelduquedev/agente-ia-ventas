@@ -1,0 +1,975 @@
+{
+  "name": "Agente IA Ventas",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -688,
+        96
+      ],
+      "id": "3933221a-982f-4224-9ca1-abdda6870547",
+      "name": "Webhook",
+      "webhookId": "c33d7949-926d-40ca-adb0-c45cd9e37638"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.query[\"hub.mode\"] }}",
+                    "rightValue": "subscribe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "dc7d0212-bd8b-4619-af23-df38b73884cb"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "70279261-cb8c-4564-a7ba-20e300308d63",
+                    "leftValue": "={{ $json.body.entry[0].changes[0].value.messages[0].type }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -224,
+        80
+      ],
+      "id": "511bb465-51f1-4334-ab81-b180107d4169",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Capturamos el cuerpo del Webhook\nconst body = $input.first().json.body;\n\n// Navegamos por la estructura de Meta (entry -> changes -> value)\nconst value = body?.entry?.[0]?.changes?.[0]?.value;\n\n// 1. Verificamos si realmente hay un mensaje de texto\nconst message = value?.messages?.[0];\nconst esMensajeTexto = !!(message?.text?.body);\n\nif (esMensajeTexto) {\n    // LIMPIEZA DE TELÉFONO: Meta solo acepta números puros (ej: 34600000000)\n    // Este replace quita el '+' y cualquier otro carácter que no sea número\n    const telefonoLimpio = message.from.replace(/\\D/g, '');\n\n    return [{\n        json: {\n            telefono: telefonoLimpio,\n            texto: message.text.body,\n            es_mensaje: true,\n            validar: \"OK\",\n            timestamp: message.timestamp\n        }\n    }];\n}\n\n// 2. Si es un evento de 'status' (entregado/leído) o algo que no es texto\nreturn [{\n    json: {\n        telefono: \"0\",\n        texto: \"EVENTO_IGNORADO\",\n        es_mensaje: false,\n        validar: \"FILTRAR\"\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        192
+      ],
+      "id": "532bc48c-9591-41f6-b644-45962393300b",
+      "name": "Code in JavaScript",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const hoy = new Date();\nconst opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Madrid' };\nconst fechaActual = hoy.toLocaleDateString('es-ES', opciones);\nconst nodoInicial = $('Code in JavaScript').first().json;\nconst textoDelUsuario = nodoInicial.texto || \"\";\nconst telefonoDelUsuario = nodoInicial.telefono || \"\";\nconst nodoBD = $('BD Conversaciones (Lee)').first()?.json;\nconst idFila = nodoBD?.id || null; \nconst historialBD = nodoBD?.historial || \"[]\";\nlet mensajesAnteriores = [];\nif (historialBD && historialBD !== \"null\") {\n  try {\n    mensajesAnteriores = (typeof historialBD === 'string') ? JSON.parse(historialBD) : historialBD;\n  } catch (e) {\n    mensajesAnteriores = [];\n  }\n}\n\nconst mensajeSistema = {\n  role: \"system\",\n  content: `Hoy es ${fechaActual}. Eres el Asistente de Ventas de \"Automóviles Élite Valladolid\" 🚗✨.\n\nSTOCK REAL (Usa SOLO estos modelos, nunca inventes otros):\n- SUVs: Volkswagen Tiguan, Volkswagen Touran, Toyota RAV4 Hybrid, Hyundai Tucson, Hyundai Kona Electric, Renault Captur, Seat Arona, Peugeot 3008.\n- Compactos: Toyota Corolla Hybrid, Toyota Yaris Hybrid, Seat León, Volkswagen Polo, Renault Mégane E-Tech, Peugeot 208.\n- Económicos: Seat Ibiza, Renault Clio.\n\nIDENTIDAD Y ESTILO:\n- Eres elegante, cercano y proactivo.\n- OBLIGATORIO: Usa DOBLE SALTO DE LÍNEA entre frases para que el texto respire.\n- Usa emojis estratégicos (🚗, ✨, 📧, 🏁, 📅) siempre al final de las frases.\n\nMEMORIA ABSOLUTA (LEE ESTO PRIMERO ANTES DE RESPONDER):\n- Antes de escribir cualquier respuesta, escanea TODO el historial.\n- Si encuentras un email (contiene @), está CONFIRMADO. PROHIBIDO volver a pedirlo.\n- Si encuentras un nombre, está CONFIRMADO. PROHIBIDO volver a pedirlo.\n- Si ya tienes nombre + email + día + hora → ejecuta el TRIGGER DE CIERRE inmediatamente.\n\nTRIGGER DE CIERRE (obligatorio cuando tengas los 4 datos):\n- Cuando tengas nombre + email + día + hora confirmados, responde EXACTAMENTE:\n  \"¡Perfecto! Acabo de enviarte la información y el recordatorio a [email]. 📧\n\nTu cita es el [día] a las [hora] en Calle del Motor 12, Valladolid. ¡Hasta entonces! 🏁\"\n- Después de este mensaje NO hagas ninguna pregunta más.\n\nREGLAS DE CONVERSACIÓN:\n1. Prohibido inventar nombres de coches. Usa solo los del STOCK REAL.\n2. Bienvenida: Si solo saludan (\"Hola\"), responde: \"¡Hola! Bienvenido a Automóviles Élite Valladolid. ✨ ¿Estás buscando un coche nuevo o necesitas que te asesoremos con alguna oferta especial? 🚗\"\n3. Captura de datos: Si el cliente quiere la ficha técnica pero NO tienes sus datos en el historial, pídelos TODO en un solo mensaje junto con la propuesta de cita:\n   \"¿A qué nombre y correo te envío los detalles del [Coche]? 📧\n\n   Y para que puedas verlo en persona, ¿te viene bien este lunes a las 10:00? 📅\"\n   - Si el cliente confirma o propone otra hora, acéptala y ejecuta el TRIGGER DE CIERRE.\n   - PROHIBIDO hacer esta pregunta si ya tienes nombre y email en el historial.\n4. Confirmación de envío: En cuanto tengas nombre + email + día + hora, ejecuta el TRIGGER DE CIERRE usando EXACTAMENTE \"Acabo de enviarte\" — nunca \"te enviaré\" ni \"voy a enviarte\".\n\nCICLO OBLIGATORIO: 1.Modelo → 2.Precio/Cuota → 3.Nombre + Email + Cita propuesta (todo en un mensaje) → 4.TRIGGER DE CIERRE.`\n};\n\nconst historialRecortado = Array.isArray(mensajesAnteriores) ? mensajesAnteriores.slice(-8) : [];\nconst mensajesParaGroq = [\n  mensajeSistema,\n  ...historialRecortado,\n  { role: \"user\", content: textoDelUsuario }\n];\n\nreturn [{\n  json: {\n    id: idFila,\n    telefono: telefonoDelUsuario,\n    historial_original: historialBD,\n    payload_groq: {\n      model: \"llama-3.1-8b-instant\",\n      messages: mensajesParaGroq,\n      temperature: 0.1,\n      max_tokens: 400\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        192
+      ],
+      "id": "09ba3ce3-2f4a-4f09-ad33-055314c04d3e",
+      "name": "Code 2 in JavaScript1",
+      "executeOnce": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.payload_groq }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        192
+      ],
+      "id": "43f93e37-6385-4a9f-ac91-6505ec23bef9",
+      "name": "HTTP Groq",
+      "executeOnce": false,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "TH1NOZEzg45QzNb2",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/1004595809414194/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "contentType": "=json",
+        "specifyBody": "json",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": \"{{ $json.telefono }}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"body\": \"{{ $json.respuesta_meta }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1920,
+        0
+      ],
+      "id": "ad9449fc-914b-4c6e-a160-a80c6599c457",
+      "name": "HTTP Meta",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "Jj01AMYgWUs9mE2g",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9bf9a87e-ec64-4380-8e7b-e24bb015db63",
+              "leftValue": "={{ $json.es_mensaje }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        192
+      ],
+      "id": "ab5958a3-6be6-41ce-be4a-b321903b07c2",
+      "name": "If",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $node[\"Webhook\"].json[\"query\"][\"hub.challenge\"] }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6c2e35f5-1124-47c2-8c30-f70b7095c738",
+      "name": "Verificación de Meta"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        192
+      ],
+      "id": "8cedc4da-4c17-4416-b90d-a97b717aba70",
+      "name": "Mensajes Reales"
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- 1. CAPTURA Y LIMPIEZA ---\nlet datosChain = {};\nconst textoCrudo = $node[\"Basic LLM Chain\"]?.json?.text || \"\";\ntry {\n    const textoLimpioJSON = textoCrudo.replace(/```json|```/g, \"\").trim();\n    const inicio = textoLimpioJSON.indexOf('{');\n    const fin = textoLimpioJSON.lastIndexOf('}') + 1;\n    if (inicio !== -1 && fin !== 0) {\n        const parsed = JSON.parse(textoLimpioJSON.substring(inicio, fin));\n        datosChain = parsed.output || parsed;\n    }\n} catch (e) { datosChain = {}; }\n\nconst nodoHTTP = $node[\"HTTP Groq\"]?.json || {};\nconst respuestaIA = nodoHTTP.choices?.[0]?.message?.content || datosChain.respuesta || \"\";\nconst datosPrevios = $node[\"Code 2 in JavaScript1\"]?.json || {};\n\n// --- 2. HISTORIAL ---\nlet historialAcumulado = [];\ntry { historialAcumulado = JSON.parse(datosPrevios.historial_original || \"[]\"); } catch (e) { historialAcumulado = []; }\nconst textoUsuarioActual = $node[\"Code in JavaScript\"]?.json?.texto || \"\";\nif (textoUsuarioActual) historialAcumulado.push({ role: 'user', content: textoUsuarioActual });\nif (respuestaIA) historialAcumulado.push({ role: 'assistant', content: respuestaIA });\n\nconst historial_actualizado = JSON.stringify(historialAcumulado.slice(-10));\nconst historial_final = historialAcumulado.map(m => m.content || \"\").join(\" \");\n\n// --- 3. EMAIL ---\nconst emailMatch = historial_final.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/);\nconst emailFinal = emailMatch ? emailMatch[0] : (datosChain.lead_email || \"\");\n\n// --- 4. NOMBRE ---\nconst nodoBD = $node[\"BD Conversaciones (Lee)\"]?.json || {};\nlet nombreReal = datosChain.lead_nombre || \"\";\nif (!nombreReal) {\n    const nombreMatch = historial_final.match(\n        /(?:a nombre de|nombre de|soy|me llamo)\\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)*)/i\n    );\n    nombreReal = nombreMatch ? nombreMatch[1] : (nodoBD.nombre || \"Cliente\");\n}\n\n// --- 5. CATÁLOGO ---\nconst catalogo = {\n    'corolla':  { modelo: 'Toyota Corolla Hybrid',   p: '22.500€', c: '450€/mes', ficha: 'Motor Híbrido 140H, Etiqueta ECO, Consumo 4.4L/100km.' },\n    'yaris':    { modelo: 'Toyota Yaris Hybrid',     p: '18.900€', c: '290€/mes', ficha: 'Motor Híbrido 116H, Etiqueta ECO, Consumo 3.8L/100km.' },\n    'rav4':     { modelo: 'Toyota RAV4 Hybrid',      p: '38.500€', c: '590€/mes', ficha: 'Motor Híbrido 218H, AWD-i, Consumo 5.8L/100km.' },\n    'tiguan':   { modelo: 'Volkswagen Tiguan',       p: '28.900€', c: '380€/mes', ficha: 'Motor TSI/TDI, Cambio DSG opcional, Maletero 615L.' },\n    'polo':     { modelo: 'Volkswagen Polo',         p: '15.900€', c: '199€/mes', ficha: 'Motor TSI 95CV, Digital Cockpit, App-Connect.' },\n    'touran':   { modelo: 'Volkswagen Touran',       p: '32.000€', c: '420€/mes', ficha: 'Motor TDI 150CV, 7 plazas, Maletero 743L.' },\n    'ibiza':    { modelo: 'Seat Ibiza',              p: '13.900€', c: '175€/mes', ficha: 'Motor TSI 95CV, Conectividad Full Link.' },\n    'leon':     { modelo: 'Seat León',               p: '22.000€', c: '310€/mes', ficha: 'Motor TSI/TDI, Etiqueta ECO disponible.' },\n    'arona':    { modelo: 'Seat Arona',              p: '17.500€', c: '230€/mes', ficha: 'Motor TSI 110CV, Pantalla 8.25\", Full Link.' },\n    'clio':     { modelo: 'Renault Clio',            p: '14.500€', c: '185€/mes', ficha: 'Motor TCe 90CV, Pantalla 9.3\" vertical.' },\n    'megane':   { modelo: 'Renault Mégane E-Tech',   p: '34.000€', c: '490€/mes', ficha: '100% eléctrico, 220CV, Autonomía 470km.' },\n    'captur':   { modelo: 'Renault Captur',          p: '21.000€', c: '295€/mes', ficha: 'Motor TCe 140CV mild hybrid, Visión 360°.' },\n    '208':      { modelo: 'Peugeot 208',             p: '14.200€', c: '188€/mes', ficha: 'Motor PureTech 100CV, i-Cockpit 3D.' },\n    '3008':     { modelo: 'Peugeot 3008',            p: '31.000€', c: '430€/mes', ficha: 'Motor PureTech/BlueHDi, i-Cockpit panorámico.' },\n    'tucson':   { modelo: 'Hyundai Tucson',          p: '27.500€', c: '370€/mes', ficha: 'Motor HEV 230CV, Bluelink conectividad.' },\n    'kona':     { modelo: 'Hyundai Kona Electric',   p: '33.000€', c: '450€/mes', ficha: '100% eléctrico, 218CV, Autonomía 490km.' },\n    'default':  { modelo: 'Vehículo de Interés',     p: 'Consultar', c: 'Consultar', ficha: 'Contacta con un asesor para recibir la ficha técnica personalizada.' }\n};\n\n// --- 6. RESCATE DE COCHE (solo mensajes del usuario, el chain no es fiable para esto) ---\nlet cocheEncontrado = \"default\";\nconst marcas = Object.keys(catalogo).filter(m => m !== 'default');\n\n// SOLO mensajes del usuario — ignoramos IA y Chain para evitar contaminación con listas\nconst textosUsuario = historialAcumulado\n    .filter(m => m.role === 'user')\n    .map(m => m.content || \"\")\n    .join(\" \")\n    .toLowerCase();\n\ncocheEncontrado = marcas.find(m => textosUsuario.includes(m)) || \"default\";\nconst ref = catalogo[cocheEncontrado];\n\n// --- 7. CITA ---\nlet citaFecha = (datosChain.cita_fecha || \"\").toUpperCase().trim();\nlet citaHora  = (datosChain.cita_hora  || \"\").trim();\n\nif (!citaFecha) {\n    const fechaMatch = (respuestaIA + \" \" + historial_final)\n        .match(/\\b(lunes|martes|miércoles|jueves|viernes|sábado|domingo|mañana|hoy)\\b/i);\n    if (fechaMatch) citaFecha = fechaMatch[0].toUpperCase();\n}\nif (!citaHora) {\n    const horaMatch = (respuestaIA + \" \" + textoUsuarioActual + \" \" + historial_final)\n        .match(/\\blas?\\s+(\\d{1,2})(?:[:h](\\d{2}))?\\b/i);\n    if (horaMatch) {\n        const h = horaMatch[1].padStart(2, '0');\n        const m = horaMatch[2] || '00';\n        citaHora = `${h}:${m}`;\n    } else {\n        const horaDirecta = (respuestaIA + \" \" + textoUsuarioActual + \" \" + historial_final)\n            .match(/\\b(\\d{1,2})[:h](\\d{2})\\b/);\n        if (horaDirecta) citaHora = `${horaDirecta[1].padStart(2,'0')}:${horaDirecta[2]}`;\n    }\n}\n\nconst tieneCitaCompleta = (citaFecha !== \"\" && citaHora !== \"\");\n\n// --- 8. LÓGICA DE ENVÍO ---\nconst iaDiceQueEnvia = /\\b(acabo de enviarte|acabo de enviar|ya te he enviado|te he mandado|acabo de mandarte|enviado)\\b/i\n    .test(respuestaIA);\n\nlet enviarEmailYaChain = (datosChain.enviar_email_ya || \"NO\").toUpperCase() === \"SI\";\n\nconst enviarAhora = (\n    emailFinal.includes('@') &&\n    nombreReal !== \"Cliente\" &&\n    tieneCitaCompleta &&\n    iaDiceQueEnvia &&\n    enviarEmailYaChain\n);\n\n// --- 9. SALIDA ---\nreturn [{\n    json: {\n        historial_actualizado,\n        respuesta: respuestaIA,\n        respuesta_meta: respuestaIA.replace(/\"/g, \"'\").replace(/\\n/g, \"\\\\n\"),\n        telefono: datosPrevios.telefono || \"0\",\n        lead_email: emailFinal,\n        lead_nombre: nombreReal,\n        lead_coche: ref.modelo,\n        ficha_tecnica: ref.ficha,\n        cita_fecha: citaFecha,\n        cita_hora: citaHora,\n        es_cita: tieneCitaCompleta ? \"SI\" : \"NO\",\n        precio_estimado: ref.p,\n        cuota_mensual: ref.c,\n        enviar_email_ya: enviarAhora ? \"SI\" : \"NO\",\n        estado_seguimiento: tieneCitaCompleta ? \"CITA_LISTA_PARA_ENVIO\" : \"RECOLECTANDO_HORA\"\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        192
+      ],
+      "id": "5f49cf79-b6fc-4117-8fa9-050863f99b78",
+      "name": "Code 3 in JavaScript1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "83b8a50a-5752-46b6-83da-f19ffdf73a46",
+              "leftValue": "={{ $node[\"BD Conversaciones (Lee)\"].json[\"historial\"] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        576
+      ],
+      "id": "4d3b5bf3-9f8a-4cd8-8d02-1095d5828d2d",
+      "name": "If (historial)"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "conversaciones",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telefono",
+              "condition": "eq",
+              "keyValue": "={{ $json.telefono }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        192
+      ],
+      "id": "93374d66-04d5-4e1a-bf89-073e15f7a58b",
+      "name": "BD Conversaciones (Lee)",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.lead_email }}",
+        "subject": "={{ $json.lead_nombre }}, confirmación de cita y detalles del {{ $json.lead_coche }} 🚗",
+        "message": "=<div style=\"font-family: 'Segoe UI', Arial, sans-serif; color: #333; max-width: 550px; margin: auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);\">\n  \n  <!-- Cabecera -->\n  <div style=\"background-color: #1a1a1a; color: #d4af37; padding: 25px; text-align: center;\">\n    <h2 style=\"margin: 0; font-size: 22px; letter-spacing: 2px;\">AUTOMÓVILES ÉLITE</h2>\n    <p style=\"margin: 5px 0 0; font-size: 10px; text-transform: uppercase; color: #888;\">Valladolid</p>\n  </div>\n  \n  <div style=\"padding: 30px; background-color: #ffffff;\">\n    <p style=\"font-size: 16px;\">Hola <strong>{{ $json.lead_nombre }}</strong>,</p>\n    <p style=\"color: #666;\">Es un placer saludarte. Aquí tienes la ficha técnica detallada y los detalles de tu gestión:</p>\n\n    <!-- BLOQUE 1: CITA — Aparece si hay fecha y hora confirmadas -->\n    {{ $json.cita_fecha !== \"\" && $json.cita_hora !== \"\" ? `\n    <div style=\"background-color: #fffdf5; border: 2px solid #d4af37; border-radius: 10px; padding: 20px; margin: 20px 0; text-align: center;\">\n        <p style=\"margin: 0 0 8px 0; color: #d4af37; font-size: 12px; font-weight: bold; text-transform: uppercase;\">📅 Cita Confirmada</p>\n        <div style=\"font-size: 22px; font-weight: bold; color: #1a1a1a;\">` + $json.cita_fecha + ` a las ` + $json.cita_hora + `</div>\n        <p style=\"margin: 8px 0 0 0; font-size: 13px; color: #555;\">📍 Calle del Motor 12, Valladolid</p>\n    </div>` : \"\" }}\n\n    <!-- BLOQUE 2: INFORMACIÓN DEL VEHÍCULO -->\n    <div style=\"background-color: #f9f9f9; border-radius: 10px; padding: 20px; margin: 20px 0;\">\n        <p style=\"margin: 0 0 15px 0; font-size: 13px; font-weight: bold; color: #1a1a1a; border-bottom: 1px solid #eee; padding-bottom: 5px;\">DETALLES DEL VEHÍCULO</p>\n        <table style=\"width: 100%; font-size: 14px;\">\n            <tr>\n                <td style=\"padding: 5px 0; color: #777;\">Modelo:</td>\n                <td style=\"padding: 5px 0; text-align: right; font-weight: bold;\">{{ $json.lead_coche }}</td>\n            </tr>\n            <tr>\n                <td style=\"padding: 5px 0; color: #777;\">Precio desde:</td>\n                <td style=\"padding: 5px 0; text-align: right; font-weight: bold; color: #1a1a1a;\">{{ $json.precio_estimado }}</td>\n            </tr>\n            <tr>\n                <td style=\"padding: 5px 0; color: #d4af37; font-weight: bold;\">Cuota mensual:</td>\n                <td style=\"padding: 5px 0; text-align: right; font-weight: bold; color: #d4af37; font-size: 18px;\">{{ $json.cuota_mensual }}</td>\n            </tr>\n        </table>\n    </div>\n\n    <!-- BLOQUE 3: FICHA TÉCNICA -->\n    <div style=\"border-left: 3px solid #d4af37; padding-left: 15px; margin: 25px 0; background-color: #fafafa; padding-top: 10px; padding-bottom: 10px;\">\n        <p style=\"margin: 0 0 5px 0; font-size: 11px; font-weight: bold; color: #d4af37; text-transform: uppercase;\">Especificaciones Destacadas</p>\n        <p style=\"font-size: 13px; color: #444; line-height: 1.6;\">\n          {{ $json.ficha_tecnica }}\n        </p>\n    </div>\n\n    <!-- BOTÓN DE ACCIÓN -->\n    <div style=\"text-align: center; margin-top: 30px;\">\n        <a href=\"https://wa.me/{{ $json.telefono }}\" style=\"background-color: #1a1a1a; color: #d4af37; padding: 14px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;\">CONTINUAR POR WHATSAPP</a>\n    </div>\n  </div>\n\n  <div style=\"background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 10px; color: #999;\">\n    &copy; 2026 Automóviles Élite Valladolid.\n  </div>\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2144,
+        288
+      ],
+      "id": "0e74e90a-8d4a-4937-830d-ad246f66651c",
+      "name": "Enviar Mensaje",
+      "webhookId": "e01a6e45-8799-4880-a2a1-83100367fa79",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "K1st39aDrrT3EHxW",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6955621b-6aba-4dbb-8af9-72f1236b0b30",
+              "leftValue": "={{ $json.lead_email }}",
+              "rightValue": "SI",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c35a1a03-ec1f-4933-bbb2-0bfc7264477c",
+              "leftValue": "={{ $json.enviar_email_ya }}",
+              "rightValue": "SI",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        192
+      ],
+      "id": "daa7d39c-10a0-4cfe-b4f5-de9f1e98d346",
+      "name": "Filter Info/Cita"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "leads",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telefono",
+              "condition": "eq",
+              "keyValue": "={{ $('Code 3 in JavaScript1').first().json.telefono }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "email_enviado",
+              "fieldValue": "true"
+            },
+            {
+              "fieldId": "estado",
+              "fieldValue": "={{ 'NUEVO CLIENTE' }}"
+            },
+            {
+              "fieldId": "ultima_actualizacion",
+              "fieldValue": "={{ $now }}"
+            },
+            {
+              "fieldId": "estado_seguimiento",
+              "fieldValue": "OFERTA_ENVIADA"
+            },
+            {
+              "fieldId": "categoria_interes",
+              "fieldValue": "={{ $json.categoria_interes }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        272
+      ],
+      "id": "0836906d-6189-4240-8014-dce570d1b8e3",
+      "name": "Marcar Email Enviado",
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={\"status\": \"ok\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -448,
+        96
+      ],
+      "id": "faab2d32-0df3-4c88-a040-7bd58234b21c",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.1-8b-instant",
+        "options": {
+          "maxTokensToSample": 250,
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        432
+      ],
+      "id": "1d6a2692-162b-41d8-9670-035f64b80b12",
+      "name": "Groq Chat Model 2",
+      "credentials": {
+        "groqApi": {
+          "id": "Q3g2ke9JM1WlsOW5",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres un extractor de datos de conversaciones de ventas.\n\nCONVERSACIÓN COMPLETA:\n{{ $node[\"Code 2 in JavaScript1\"].json.payload_groq.messages.slice(1).map(m => m.role.toUpperCase() + ': ' + m.content).join('\\n') }}\n\nÚLTIMA RESPUESTA DEL ASISTENTE:\n{{ $node[\"HTTP Groq\"].json.choices[0].message.content }}\n\nDevuelve ÚNICAMENTE este JSON plano, sin markdown, sin texto adicional, sin la clave 'output':\n\n{\n  \"lead_nombre\": \"Nombre completo del cliente (ej: Alex Duque) o vacío\",\n  \"lead_email\": \"email@ejemplo.com o vacío\",\n  \"lead_coche\": \"Modelo exacto mencionado o vacío\",\n  \"cita_fecha\": \"Día acordado en mayúsculas (ej: LUNES) o vacío\",\n  \"cita_hora\": \"Hora en HH:MM. 'las 12' = 12:00, 'a las 9' = 09:00, 'las 10 y media' = 10:30. Vacío si no confirmada.\",\n  \"es_cita\": \"SI solo si hay cita_fecha Y cita_hora confirmados, sino NO\",\n  \"enviar_email_ya\": \"SI solo si tienes los 4 campos: lead_nombre + lead_email + cita_fecha + cita_hora. Sino NO\",\n  \"precio_estimado\": \"Precio mencionado o vacío\",\n  \"cuota_mensual\": \"Cuota mencionada o vacío\",\n  \"mostrar_financiacion\": \"SI si se habló de precio, sino NO\"\n}",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1344,
+        192
+      ],
+      "id": "d06240fa-e5bf-4b1f-bcb3-fff0fa5e70c6",
+      "name": "Basic LLM Chain",
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telefono",
+              "condition": "eq",
+              "keyValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"telefono\"] }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"lead_email\"] }}"
+            },
+            {
+              "fieldId": "nombre",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"lead_nombre\"] }}"
+            },
+            {
+              "fieldId": "coche_interes",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"lead_coche\"] }}"
+            },
+            {
+              "fieldId": "estado",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"enviar_email_ya\"] === 'SI' ? 'Cualificado' : 'Interesado' }}"
+            },
+            {
+              "fieldId": "ultima_actualizacion",
+              "fieldValue": "={{ $now }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        96
+      ],
+      "id": "1eb9a68b-a977-4e18-88d2-1fcad25c4872",
+      "name": "Guardar Leads",
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "leads",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "estado",
+              "fieldValue": "={{ $json.enviar_email_ya === 'SI' ? 'Cualificado (Nuevo)' : 'Nuevo' }}"
+            },
+            {
+              "fieldId": "telefono",
+              "fieldValue": "={{ $json.telefono }}"
+            },
+            {
+              "fieldId": "nombre",
+              "fieldValue": "={{ $json.lead_nombre }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.lead_email }}"
+            },
+            {
+              "fieldId": "coche_interes",
+              "fieldValue": "={{ $json.lead_coche }}"
+            },
+            {
+              "fieldId": "ultima_actualizacion",
+              "fieldValue": "={{ $now }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        480
+      ],
+      "id": "3641419e-ae4f-4c5a-8300-64bb90806479",
+      "name": "Crear Lead Nuevo",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "conversaciones",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "telefono",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"telefono\"] }}"
+            },
+            {
+              "fieldId": "=historial",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"historial_actualizado\"] }}"
+            },
+            {
+              "fieldId": "ultima_actualizacion",
+              "fieldValue": "={{ $now }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        480
+      ],
+      "id": "f9f397ac-261f-45d8-b179-30bbc203236a",
+      "name": "Crear Conversación",
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "conversaciones",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telefono",
+              "condition": "eq",
+              "keyValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"telefono\"] }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "=historial",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"historial_actualizado\"] }}"
+            },
+            {
+              "fieldId": "ultima_actualizacion",
+              "fieldValue": "={{ $now }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        672
+      ],
+      "id": "2bfa0091-5e2b-4f37-85d9-8cff385fff17",
+      "name": "Actualización Conversación",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telefono",
+              "condition": "eq",
+              "keyValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"telefono\"] }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "nombre",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"lead_nombre\"] }}"
+            },
+            {
+              "fieldId": "coche_interes",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"lead_coche\"] }}"
+            },
+            {
+              "fieldId": "estado",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"enviar_email_ya\"] === 'SI' ? 'Cualificado (Recurrente)' : 'Viejo / Interesado' }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $node[\"Code 3 in JavaScript1\"].json[\"lead_email\"] }}"
+            },
+            {
+              "fieldId": "ultima_actualizacion",
+              "fieldValue": "={{ $now }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        672
+      ],
+      "id": "d75d57f2-da91-431f-916b-6ff16e7b5679",
+      "name": "Actualizar Lead",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Verificación de Meta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mensajes Reales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code 2 in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Groq",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Groq": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "BD Conversaciones (Lee)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes Reales": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code 3 in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If (historial)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Meta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter Info/Cita",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If (historial)": {
+      "main": [
+        [
+          {
+            "node": "Crear Lead Nuevo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualización Conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BD Conversaciones (Lee)": {
+      "main": [
+        [
+          {
+            "node": "Code 2 in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Mensaje": {
+      "main": [
+        [
+          {
+            "node": "Marcar Email Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Info/Cita": {
+      "main": [
+        [
+          {
+            "node": "Enviar Mensaje",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Guardar Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model 2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code 3 in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Lead Nuevo": {
+      "main": [
+        [
+          {
+            "node": "Crear Conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualización Conversación": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "3d9b09ad-7ad0-4061-92f1-66a67b81a3a6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "89b6a3035c8db2424027827737d26e81d089712c1d1e585050d44a5a332f23b9"
+  },
+  "id": "gPYVXUX8SWFQNq3R",
+  "tags": []
+}

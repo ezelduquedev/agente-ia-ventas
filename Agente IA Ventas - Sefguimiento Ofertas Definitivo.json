@@ -1,0 +1,276 @@
+{
+  "name": "Agente IA Ventas - Seguimiento Diario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -592,
+        -16
+      ],
+      "id": "2132e06f-fdae-4fd0-9fb5-7f06dc14575f",
+      "name": "Revisión Diaria"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "estado_seguimiento",
+              "condition": "eq",
+              "keyValue": "OFERTA_ENVIADA"
+            },
+            {
+              "keyName": "created_at",
+              "condition": "lt",
+              "keyValue": "={{ $today.minus({ days: 1 }).endOf('day') }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        -16
+      ],
+      "id": "68eed27e-2f31-46c1-9583-b19c9ff0a590",
+      "name": "Buscar Leads - Ficha Enviada",
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/1004595809414194/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": \"{{ $('Buscar Leads - Ficha Enviada').item.json.telefono }}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"body\": \"¡Hola *{{ $('Buscar Leads - Ficha Enviada').item.json.nombre }}*! ✨ \\n\\nSoy el asistente de *Automóviles Élite Valladolid*. Ayer estuvimos hablando sobre el *{{ $('Buscar Leads - Ficha Enviada').item.json.coche_interes }}*.\\n\\nQuería avisarte de que tenemos una oferta especial esta semana. ¿Te gustaría venir a verlo? 📅\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -176,
+        -16
+      ],
+      "id": "e300ae8b-8ce0-4d0a-8bc9-a5859011cd61",
+      "name": "Enviar Seguimiento Whatsapp",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "Jj01AMYgWUs9mE2g",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fc5eafff-1328-46b2-9325-4c6390b7cbf9",
+              "leftValue": "email",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        32,
+        -16
+      ],
+      "id": "d130cd6d-5940-46fa-8835-db3c19b51aff",
+      "name": "Verifica email"
+    },
+    {
+      "parameters": {
+        "sendTo": "ezelduquedev@gmail.com",
+        "subject": "=✅ Seguimiento enviado: {{ $('Buscar Leads - Ficha Enviada').item.json.nombre }}",
+        "message": "=El sistema ha enviado un WhatsApp de seguimiento automático a {{ $('Buscar Leads - Ficha Enviada').item.json.nombre }}. \n\nSu categoría de interés es: {{ $('Buscar Leads - Ficha Enviada').item.json.categoria_interes }}.\nEl vehículo consultado fue: {{ $('Buscar Leads - Ficha Enviada').item.json.coche_interes }}.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        -128
+      ],
+      "id": "ca333db9-595e-4f72-9b03-3c90831e131d",
+      "name": "Verificación interna",
+      "webhookId": "3b54d5b1-a549-4451-a0b6-9058c9bd0236",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "K1st39aDrrT3EHxW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Buscar Leads - Ficha Enviada').item.json[\"email\"] }}",
+        "subject": "=Oferta Técnica Personalizada: {{ $('Buscar Leads - Ficha Enviada').item.json.coche_interes }}",
+        "message": "==<div style=\"font-family: 'Segoe UI', Arial, sans-serif; color: #333; max-width: 550px; margin: auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);\">\n\n  <!-- Cabecera -->\n  <div style=\"background-color: #1a1a1a; color: #d4af37; padding: 25px; text-align: center;\">\n    <h2 style=\"margin: 0; font-size: 22px; letter-spacing: 2px;\">AUTOMÓVILES ÉLITE</h2>\n    <p style=\"margin: 5px 0 0; font-size: 10px; text-transform: uppercase; color: #888;\">Valladolid</p>\n  </div>\n\n  <div style=\"padding: 30px; background-color: #ffffff;\">\n    <p style=\"font-size: 16px;\">Hola <strong>{{ $('Buscar Leads - Ficha Enviada').item.json.nombre }}</strong>,</p>\n    <p style=\"color: #666; line-height: 1.6;\">Es un placer saludarte de nuevo. Queríamos recordarte que seguimos teniendo disponible el vehículo que te interesó y esta semana tenemos una <strong style=\"color: #d4af37;\">oferta especial</strong> que no querrás perderte.</p>\n\n    <!-- Vehículo destacado -->\n    <div style=\"background-color: #fffdf5; border: 2px solid #d4af37; border-radius: 10px; padding: 20px; margin: 25px 0; text-align: center;\">\n      <p style=\"margin: 0 0 8px 0; color: #d4af37; font-size: 11px; font-weight: bold; text-transform: uppercase;\">🚗 Tu vehículo de interés</p>\n      <div style=\"font-size: 22px; font-weight: bold; color: #1a1a1a;\">{{ $('Buscar Leads - Ficha Enviada').item.json.coche_interes }}</div>\n      <p style=\"margin: 8px 0 0 0; font-size: 13px; color: #555;\">Disponible para visita esta semana</p>\n    </div>\n\n    <!-- Propuesta -->\n    <div style=\"border-left: 3px solid #d4af37; padding-left: 15px; margin: 25px 0; background-color: #fafafa; padding-top: 10px; padding-bottom: 10px;\">\n      <p style=\"margin: 0 0 5px 0; font-size: 11px; font-weight: bold; color: #d4af37; text-transform: uppercase;\">¿Por qué visitarnos?</p>\n      <p style=\"font-size: 13px; color: #444; line-height: 1.6; margin: 0;\">Podrás ver el vehículo en persona, resolver todas tus dudas con nuestro equipo y conocer las mejores opciones de financiación adaptadas a ti.</p>\n    </div>\n\n    <!-- Ubicación -->\n    <div style=\"background-color: #f9f9f9; border-radius: 10px; padding: 15px; margin: 20px 0; text-align: center;\">\n      <p style=\"margin: 0; font-size: 13px; color: #777;\">📍 <strong>Calle del Motor 12, Valladolid</strong></p>\n      <p style=\"margin: 5px 0 0; font-size: 12px; color: #999;\">Lunes a Viernes: 9:00 - 19:00 · Sábados: 9:00 - 14:00</p>\n    </div>\n\n    <!-- Botón -->\n    <div style=\"text-align: center; margin-top: 30px;\">\n      <a href=\"https://wa.me/{{ $('Buscar Leads - Ficha Enviada').item.json.telefono }}\" style=\"background-color: #1a1a1a; color: #d4af37; padding: 14px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;\">RESERVAR VISITA POR WHATSAPP</a>\n    </div>\n  </div>\n\n  <div style=\"background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 10px; color: #999;\">\n    &copy; 2026 Automóviles Élite Valladolid.\n  </div>\n\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        64
+      ],
+      "id": "54c9ad7c-16a2-47e5-9cf1-a5d8e87372ee",
+      "name": "Oferta a Cliente",
+      "webhookId": "3b54d5b1-a549-4451-a0b6-9058c9bd0236",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "K1st39aDrrT3EHxW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telefono",
+              "condition": "eq",
+              "keyValue": "={{ $('Buscar Leads - Ficha Enviada').item.json.telefono }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "estado_seguimiento",
+              "fieldValue": "OFERTA_COMPLETADA"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        464,
+        64
+      ],
+      "id": "43b31755-9a7c-471b-8af2-3bb2825bb57d",
+      "name": "Actualizar seguimiento_estado",
+      "credentials": {
+        "supabaseApi": {
+          "id": "00JjnaLo1Pf4pMBX",
+          "name": "Supabase account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Revisión Diaria": {
+      "main": [
+        [
+          {
+            "node": "Buscar Leads - Ficha Enviada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Leads - Ficha Enviada": {
+      "main": [
+        [
+          {
+            "node": "Enviar Seguimiento Whatsapp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Seguimiento Whatsapp": {
+      "main": [
+        [
+          {
+            "node": "Verifica email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica email": {
+      "main": [
+        [
+          {
+            "node": "Verificación interna",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Oferta a Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Oferta a Cliente": {
+      "main": [
+        [
+          {
+            "node": "Actualizar seguimiento_estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0845054c-0d86-4473-82b1-4edbffa09315",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "89b6a3035c8db2424027827737d26e81d089712c1d1e585050d44a5a332f23b9"
+  },
+  "id": "uqHxvXBESANqPmmp",
+  "tags": []
+}
