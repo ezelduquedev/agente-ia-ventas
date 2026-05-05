@@ -21,6 +21,8 @@ de clientes a través de WhatsApp y email.
 | WhatsApp Cloud API | Canal de comunicación con el cliente |
 | Gmail API | Envío de emails de oferta y seguimiento |
 | Supabase | Base de datos de leads y conversaciones |
+| Docker | Contenedor para ejecutar n8n en local |
+| Cloudflare Tunnel | Exposición pública del webhook en local |
 
 ## 🔄 Workflows
 
@@ -78,10 +80,53 @@ Email profesional con diseño corporativo que incluye:
 - Precio y cuota mensual
 - Botón de contacto directo por WhatsApp
 
+## 🖥️ Entorno de desarrollo
+
+Este proyecto está desarrollado y ejecutado en una instancia 
+local de n8n usando Docker.
+
+- **URL local:** `http://localhost:5678`
+- **Modo:** Self-hosted con Docker
+
+### Instalación de n8n con Docker
+
+```bash
+docker run -it --rm \
+  --name n8n \
+  -p 5678:5678 \
+  -v ~/.n8n:/home/node/.n8n \
+  n8nio/n8n
+```
+
+Una vez arrancado, accede a `http://localhost:5678` e importa 
+los workflows desde **Workflows → Import from file**.
+
+### 🌐 Exposición pública con Cloudflare Tunnel
+
+Al correr en local, el webhook de WhatsApp no es accesible 
+desde internet. Para exponerlo se usa **Cloudflare Tunnel**:
+
+```bash
+cloudflared tunnel --url http://localhost:5678
+```
+
+La URL generada se configura como webhook en 
+**Meta Business → WhatsApp → Configuración del webhook**
+
+### ⚠️ Limitación del túnel temporal
+
+El túnel temporal de Cloudflare (`trycloudflare.com`) genera 
+una URL diferente cada vez que se reinicia. Cada vez que esto 
+ocurra hay que actualizar la URL del webhook en Meta Business.
+
+Para una URL fija en producción se recomienda:
+- Configurar un túnel permanente con dominio propio en Cloudflare
+- O migrar n8n a un VPS (Railway, DigitalOcean)
+
 ## 🚀 Cómo importar los workflows
 
 1. Descarga los archivos JSON de este repositorio
-2. Abre tu instancia de n8n
+2. Instala y arranca n8n con Docker (ver sección anterior)
 3. Ve a **Workflows → Import from file**
 4. Importa cada JSON por separado
 5. Configura las credenciales:
@@ -89,6 +134,7 @@ Email profesional con diseño corporativo que incluye:
    - Gmail OAuth2
    - Supabase API
    - Groq API
+6. Configura Cloudflare Tunnel y actualiza la URL del webhook en Meta Business
 
 ## 📋 Variables de entorno necesarias
 
