@@ -100,5 +100,5 @@ Email profesional con diseño corporativo que incluye:
 
 ## 👨‍💻 Autor
 
-Ezel Alexander Duque Arias
+Ezel Alexander Duque Arias |
 Desarrollado como proyecto de prácticas de automatización con IA.
